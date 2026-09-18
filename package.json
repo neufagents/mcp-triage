@@ -23,6 +23,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "node --test tests/*.spec.ts",
     "dev": "node src/cli.ts scan",
+    "prepare": "npm run build",
     "prepack": "npm run build",
     "prepublishOnly": "npm test"
   },
@@ -34,6 +35,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/neufagents/mcp-triage.git"
+  },
+  "homepage": "https://github.com/neufagents/mcp-triage#readme",
+  "bugs": {
+    "url": "https://github.com/neufagents/mcp-triage/issues"
   },
   "keywords": [
     "mcp",

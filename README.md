@@ -1,6 +1,6 @@
 # MCP Triage
 
-> **Pre-release — v0.1.0, not yet published to npm.** Repo under construction.
+[![npm version](https://img.shields.io/npm/v/mcp-triage.svg)](https://www.npmjs.com/package/mcp-triage) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 **Triage broken MCP setups across agent clients.** One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and — where it is safe — repairs it.
 
