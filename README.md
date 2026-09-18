@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/mcp-triage.svg)](https://www.npmjs.com/package/mcp-triage) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-**Triage broken MCP setups across agent clients.** One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and — where it is safe — repairs it.
+**Triage broken MCP setups across agent clients.** A [NeufAgents](https://neufagents.com) tool. One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and — where it is safe — repairs it.
 
 Why *triage*: a triage assesses severity fast and routes the case — a free check-and-fix pass for the mechanical problems, and a precise hint (plus a human path) for setups that need surgery.
 
@@ -32,6 +32,49 @@ Exit codes: `0` = no error findings, `1` = at least one error finding (post-fix 
 - Only files that **fail to parse** are fix candidates; healthy files are never rewritten.
 - Repairs are mechanical deletions only (comments, trailing commas). A repaired copy must parse as JSON or **nothing is written**.
 - Before the first write the original is saved as `<file>.mcp-triage.bak` (an existing backup is kept, never overwritten — so the pristine version survives repeated runs).
+
+## Example output
+
+A demo machine with three clients — one broken JSON, one unrunnable command, one healthy config:
+
+```
+$ npx mcp-triage scan
+
+MCP Triage v0.1.0 — scanned 3 config file(s)
+
+  ✗ Claude Desktop — ~/AppData/Roaming/Claude/claude_desktop_config.json — 0 server(s)
+  ✓ Codex — ~/.codex/config.toml — 2 server(s)  (toml-minimal)
+  ✓ Cursor — ~/.cursor/mcp.json — 1 server(s)
+
+Findings (4):
+  [ERROR] config.syntax — Claude Desktop: Trailing comma breaks JSON parsing
+           line 5: "args": ["-y", "@modelcontextprotocol/server-memory"],
+           → Remove the comma before the closing bracket/brace, then restart the client.
+  [ERROR] server.command-unresolvable — Codex · "notes-mcp": command "my-notes-mcp" not found on PATH
+           → This is the #1 cause of "server silently missing" bugs. Common causes: nvm-managed node (the client does not load your shell profile), missing pnpm/uv, or a typo. Use an absolute path or install the runtime the client can see.
+  [WARN ] server.relative-path-arg — Codex · "notes-mcp": Relative path argument "./notes" may resolve from the wrong directory
+           → Clients spawn servers from their own working directory. Use an absolute path to make this stable.
+  [INFO ] config.cross-client-drift — Codex · "filesystem": Server "filesystem" is configured differently across 2 clients
+           codex → ~/.codex/config.toml
+           cursor → ~/.cursor/mcp.json
+           → Drift is not always wrong — but when one client works and another does not, this is where to look.
+
+Summary: 2 error(s), 1 warning(s), 1 info — 3 server(s) across 3 file(s).
+```
+
+`--fix` takes care of the mechanical class — and nothing else:
+
+```
+$ npx mcp-triage --fix
+
+Fix results:
+  [FIXED] Claude Desktop — ~/AppData/Roaming/Claude/claude_desktop_config.json: removed 1 trailing comma
+           → backup: ~/AppData/Roaming/Claude/claude_desktop_config.json.mcp-triage.bak
+
+Summary: 1 error(s), 1 warning(s), 1 info — 4 server(s) across 3 file(s).
+```
+
+*Sample output from a demo machine; home paths shortened for readability. `--fix --dry-run` prints the same report with `[DRY]` instead of `[FIXED]`, and writes nothing.*
 
 ## Coverage notes & known limitations (v0.1)
 
