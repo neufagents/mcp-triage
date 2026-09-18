@@ -83,6 +83,10 @@ Summary: 1 error(s), 1 warning(s), 1 info — 4 server(s) across 3 file(s).
 - Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`) are **not yet scanned** (v0.1.1).
 - `--file` on a file we cannot attribute to a client: if it only parses as JSON5, you get an **info** saying so (not an error) — strict-JSON clients would reject such a file.
 
+## When `--fix` is not enough
+
+`--fix` covers the mechanical class — for free. For everything else (a client that still refuses to start after a clean scan, a setup you want hardened before it breaks, a migration across machines), [NeufAgents](https://neufagents.com) offers a paid fix service: send your triage report to `hi@neufagents.com` and you get a written scope before any work starts. Fully async, no calls.
+
 ## Development
 
 ```bash
