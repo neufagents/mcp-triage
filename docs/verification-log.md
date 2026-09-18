@@ -57,6 +57,19 @@ a second fix of the same file kept the pristine existing backup (`backupKept: tr
 the suite is 45/45 green; the packed tarball (23 files) installed into a fresh prefix ran
 `--version`, `scan`, and the library entry from the installed copy.
 
+## Clone-and-build verification + Node version floor (2026-09-19)
+
+The v0.1.0 release point was verified the way a fresh contributor consumes it:
+
+- `git clone` → `npm install` (auto-runs `prepare` → `tsc` build) → **45/45 specs green** →
+  `npm pack` (23 files) → global install of the tarball into a fresh prefix → `--version`, `scan`,
+  and `--fix` all run from the installed copy.
+- Runtime floor: on a real **Node 20.19.5** binary, `scan` and the full `--fix` flow
+  (dry-run → write → backup → idempotent re-run; backup byte-preserved) pass against a fabricated
+  Claude Desktop config. `engines: >=20` holds for the published package.
+- Dev/test scripts run `.ts` directly and therefore need **Node 22.18+** (native type stripping) —
+  also noted in the README.
+
 ## What is NOT covered yet (planned)
 
 - Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`).

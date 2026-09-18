@@ -87,11 +87,14 @@ Summary: 1 error(s), 1 warning(s), 1 info — 4 server(s) across 3 file(s).
 
 ```bash
 npm install
-npm test          # node:test, 45 specs
+npm test          # node:test, 45 specs — dev/test scripts need Node 22.18+ (native type stripping)
 npm run build     # tsc → dist/
 node src/cli.ts scan
 node src/cli.ts scan --fix --dry-run
 ```
+
+The dev and test scripts import `.ts` files directly, so they need Node 22.18+. The published package
+itself supports Node 20+ (`engines`) and its `scan` / `--fix` flows are smoke-tested on Node 20.19.
 
 The package is ESM with zero runtime dependencies; `src/index.ts` is the library entry
 (`import { discoverFiles, parseConfigFile, runChecks, applyFixes } from 'mcp-triage'`),
