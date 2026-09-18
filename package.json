@@ -1,0 +1,47 @@
+{
+  "name": "mcp-triage",
+  "version": "0.1.0",
+  "description": "Triage broken MCP setups across 8 agent clients — find what is wrong, fix what is fixable, escalate the rest. Zero runtime dependencies.",
+  "type": "module",
+  "bin": {
+    "mcp-triage": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test tests/*.spec.ts",
+    "dev": "node src/cli.ts scan"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "author": "NeufAgents (neufagents.com)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neufagents/mcp-triage.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "triage",
+    "doctor",
+    "diagnostics",
+    "cli",
+    "agent",
+    "claude",
+    "cursor",
+    "codex",
+    "windsurf",
+    "openclaw"
+  ],
+  "devDependencies": {
+    "@types/node": "^26.6.1",
+    "typescript": "^5.7.0"
+  }
+}
