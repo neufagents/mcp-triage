@@ -70,9 +70,21 @@ The v0.1.0 release point was verified the way a fresh contributor consumes it:
 - Dev/test scripts run `.ts` directly and therefore need **Node 22.18+** (native type stripping) —
   also noted in the README.
 
+## Claude Code project-scoped servers (v0.1.1, branch `feat/claude-project-scope`, 2026-09-19)
+
+`~/.claude.json` keeps project-scoped servers under `projects.<path>.mcpServers`; v0.1.1 extracts
+them alongside the user-scoped bag.
+
+- Fabricated-home E2E (Windows, Node 22.23): 1 user-scoped + 3 project-scoped definitions across
+  3 projects → all surfaced with a coverage note (`3 project-scoped server(s) from 3 project(s)`);
+  findings carry `context` (e.g. `project: /work/alpha`); identical definitions across projects
+  are merged (`projects: /work/alpha, /work/beta`); drift wording distinguishes clients vs places.
+- Real-machine scan (same box): one previously-invisible project-scoped server (an http transport
+  under `projects["D:/HermesWorkSpace"]`) is now included; scan stays clean (no new findings).
+- Suite grew 45 → **50/50 green**; `tsc` build green; `--json` exposes `note` + `context`.
+
 ## What is NOT covered yet (planned)
 
-- Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`).
 - VS Code user "profiles" (`%APPDATA%\Code\User\profiles\<id>\mcp.json`).
 - GitHub Copilot Agent Host (`~/.copilot/mcp-config.json`, workspace `.mcp.json`).
 - WSL filesystem for Windows-side scans (`\\wsl$\...`); run the tool inside WSL instead.

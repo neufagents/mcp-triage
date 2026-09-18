@@ -8,7 +8,7 @@ Why *triage*: a triage assesses severity fast and routes the case — a free che
 
 ## What it does
 
-- **Scans** (8 clients): Claude Desktop · Claude Code · Codex · Cursor · VS Code · Windsurf · OpenClaw · dsh
+- **Scans** (8 clients): Claude Desktop · Claude Code (incl. project-scoped servers from `~/.claude.json`) · Codex · Cursor · VS Code · Windsurf · OpenClaw · dsh
 - **Checks** (v0.1): JSON syntax (including the classic trailing comma), Codex-style TOML tables (basic), command resolvable on PATH, missing `${VAR}` / `process.env.VAR` references, relative-path arguments, plain `http://` remote URLs, transport/entry consistency (stdio needs a command, HTTP transports need a url, `serverName` required for dsh entries), cross-client drift for same-named servers
 - **Fixes** (opt-in `--fix`): mechanical repairs, only for files that fail to parse — strips JSON comments and trailing commas, re-verifies the result, keeps a `.mcp-triage.bak` backup. Everything else is escalated with a hint, never guessed at.
 - **JSON5-aware**: OpenClaw's `openclaw.json` is JSON5 (comments + trailing commas legal) and is parsed as such — no false syntax errors
@@ -80,14 +80,14 @@ Summary: 1 error(s), 1 warning(s), 1 info — 4 server(s) across 3 file(s).
 
 - All 8 client paths are verified against official docs and/or a real machine (verification log: `docs/verification-log.md` in the repo). OpenClaw paths additionally honor `OPENCLAW_CONFIG_PATH`; VS Code includes the remote/WSL user config (`~/.vscode-server/data/User/mcp.json`).
 - JSON clients: full parsing (OpenClaw: JSON5-light — comments and trailing commas; exotic JSON5 beyond that still fails). TOML (Codex): **basic** — `[mcp_servers.*]` tables only. YAML (dsh cordis profiles): **light** — per-entry extraction of `@deepseek-ai/dsh-mcp-client` patch entries (serverName, transport, command, args, env, cwd; `!!js` expressions kept as text for reference checks).
-- Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`) are **not yet scanned** (v0.1.1).
+- Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`) are scanned too — identical definitions across projects are merged into one entry whose context lists the projects, and findings carry the project path.
 - `--file` on a file we cannot attribute to a client: if it only parses as JSON5, you get an **info** saying so (not an error) — strict-JSON clients would reject such a file.
 
 ## Development
 
 ```bash
 npm install
-npm test          # node:test, 45 specs — dev/test scripts need Node 22.18+ (native type stripping)
+npm test          # node:test, 50 specs — dev/test scripts need Node 22.18+ (native type stripping)
 npm run build     # tsc → dist/
 node src/cli.ts scan
 node src/cli.ts scan --fix --dry-run

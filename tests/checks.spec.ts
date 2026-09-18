@@ -92,3 +92,22 @@ test('drift: same server name with different shapes across clients is info', () 
   assert.equal(d[0].checkId, 'config.cross-client-drift');
   assert.equal(d[0].severity, 'info');
 });
+
+test('drift: same name in two places of one client reports places and contexts', () => {
+  const a: ServerEntry = { name: 'github', command: 'npx', args: ['-y', 'v1'], context: 'project: /p/a' };
+  const b: ServerEntry = { name: 'github', command: 'npx', args: ['-y', 'v2'], context: 'project: /p/b' };
+  const d = checkCrossClientDrift([wrap('claude-code', [a, b])]);
+  assert.equal(d.length, 1);
+  assert.match(d[0].title, /configured differently in 2 places/);
+  assert.match(d[0].detail ?? '', /project: \/p\/a/);
+});
+
+test('check: entry context is carried into diagnostics', () => {
+  const d = runChecks(
+    [wrap('claude-code', [{ name: 'ghost', command: 'no-such-cmd-xyz-123', context: 'project: /p/a' }])],
+    baseCtx({ env: { PATH: '/nonexistent-dir' } }),
+  );
+  const f = d.find((x) => x.checkId === 'server.command-unresolvable');
+  assert.ok(f);
+  assert.equal(f.context, 'project: /p/a');
+});

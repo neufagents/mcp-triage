@@ -42,8 +42,8 @@ export function renderHuman(input: ReportInput, version: string, fixes?: FixOutc
   for (const p of input.parsed) {
     const flag = p.ok ? '✓' : '✗';
     const n = p.servers.length;
-    const caveat = p.caveat ? `  (${p.caveat})` : '';
-    lines.push(`  ${flag} ${clientName(p.clientId)} — ${tilde(p.file)} — ${n} server(s)${caveat}`);
+    const note = [p.caveat, p.note].filter(Boolean).join('; ');
+    lines.push(`  ${flag} ${clientName(p.clientId)} — ${tilde(p.file)} — ${n} server(s)${note ? `  (${note})` : ''}`);
   }
   lines.push('');
 
@@ -53,7 +53,7 @@ export function renderHuman(input: ReportInput, version: string, fixes?: FixOutc
   } else {
     lines.push(`Findings (${sorted.length}):`);
     for (const d of sorted) {
-      const where = [clientName(d.clientId ?? ''), d.serverName ? `"${d.serverName}"` : ''].filter(Boolean).join(' · ');
+      const where = [clientName(d.clientId ?? ''), d.context ?? '', d.serverName ? `"${d.serverName}"` : ''].filter(Boolean).join(' · ');
       lines.push(`  [${LABEL[d.severity]}] ${d.checkId} — ${where ? where + ': ' : ''}${d.title}`);
       if (d.detail) for (const l of d.detail.split('\n')) lines.push(`           ${l}`);
       if (d.hint) lines.push(`           → ${d.hint}`);
@@ -103,7 +103,8 @@ export function renderJson(input: ReportInput, version: string, fixes?: FixOutco
         format: p.format,
         ok: p.ok,
         caveat: p.caveat,
-        servers: p.servers.map((s) => ({ name: s.name, command: s.command, url: s.url, transport: s.transport })),
+        note: p.note,
+        servers: p.servers.map((s) => ({ name: s.name, command: s.command, url: s.url, transport: s.transport, context: s.context })),
       })),
       diagnostics: input.diagnostics,
       ...(fixes !== undefined ? { fixes } : {}),

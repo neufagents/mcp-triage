@@ -68,7 +68,7 @@ function stringy(s: ServerEntry): string[] {
 
 function checkServer(clientId: string, file: string, s: ServerEntry, ctx: CheckContext): Diagnostic[] {
   const diags: Diagnostic[] = [];
-  const base = { clientId, file, serverName: s.name };
+  const base = { clientId, file, serverName: s.name, ...(s.context !== undefined ? { context: s.context } : {}) };
 
   if (s.enabled === false) {
     diags.push({
@@ -189,14 +189,14 @@ export function runChecks(parsed: ParsedConfig[], ctx: CheckContext = DEFAULT_CH
   return out;
 }
 
-/** Cross-file drift: same server name present in multiple clients but with different launch shape. */
+/** Cross-file drift: same server name present in multiple places but with a different launch shape. */
 export function checkCrossClientDrift(parsed: ParsedConfig[]): Diagnostic[] {
-  const byName = new Map<string, { file: string; clientId: string; shape: string }[]>();
+  const byName = new Map<string, { file: string; clientId: string; context?: string; shape: string }[]>();
   for (const p of parsed) {
     for (const s of p.servers) {
       const shape = JSON.stringify([s.command ?? s.url ?? '', s.args ?? []]);
       const list = byName.get(s.name) ?? [];
-      list.push({ file: p.file, clientId: p.clientId, shape });
+      list.push({ file: p.file, clientId: p.clientId, context: s.context, shape });
       byName.set(s.name, list);
     }
   }
@@ -205,11 +205,13 @@ export function checkCrossClientDrift(parsed: ParsedConfig[]): Diagnostic[] {
     if (list.length < 2) continue;
     const shapes = new Set(list.map((l) => l.shape));
     if (shapes.size > 1) {
+      const clients = new Set(list.map((l) => l.clientId));
+      const where = clients.size > 1 ? `across ${clients.size} clients (${list.length} places)` : `in ${list.length} places`;
       out.push({
         checkId: 'config.cross-client-drift',
         severity: 'info',
-        title: `Server "${name}" is configured differently across ${list.length} clients`,
-        detail: list.map((l) => `${l.clientId} → ${l.file}`).join('\n'),
+        title: `Server "${name}" is configured differently ${where}`,
+        detail: list.map((l) => `${l.clientId}${l.context ? ` (${l.context})` : ''} → ${l.file}`).join('\n'),
         hint: 'Drift is not always wrong — but when one client works and another does not, this is where to look.',
         clientId: list[0].clientId,
         file: list[0].file,

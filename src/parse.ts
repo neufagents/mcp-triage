@@ -242,18 +242,89 @@ export function extractServersFromJson(data: unknown): ServerEntry[] {
   return [];
 }
 
+// ---------- Claude Code project-scoped servers ----------
+//
+// Claude Code keeps project-scoped servers inside the same ~/.claude.json file:
+//   { "projects": { "/abs/project/path": { "mcpServers": { "<name>": { ... } } } } }
+// They connect only when Claude Code runs inside that directory. Identical definitions
+// across projects are merged into a single entry whose `context` lists the projects;
+// findings for these entries carry the project path.
+
+export interface ClaudeProjectScope {
+  servers: ServerEntry[];
+  /** Number of projects that carry at least one server definition. */
+  projects: number;
+}
+
+function entryShapeKey(s: ServerEntry): string {
+  const envKey = s.env ? Object.entries(s.env).sort(([a], [b]) => (a < b ? -1 : 1)) : null;
+  return JSON.stringify([
+    s.name,
+    s.command ?? null,
+    s.args ?? null,
+    envKey,
+    s.url ?? null,
+    s.transport ?? null,
+    s.cwd ?? null,
+    s.enabled ?? null,
+  ]);
+}
+
+/** Human label for the projects an entry was found in. */
+export function contextLabel(paths: string[]): string {
+  if (paths.length === 1) return `project: ${paths[0]}`;
+  const shown = paths.slice(0, 2).join(', ');
+  const more = paths.length > 2 ? ` +${paths.length - 2} more` : '';
+  return `projects: ${shown}${more}`;
+}
+
+export function extractClaudeProjectServers(data: unknown): ClaudeProjectScope {
+  const empty: ClaudeProjectScope = { servers: [], projects: 0 };
+  if (!data || typeof data !== 'object') return empty;
+  const projects = (data as Record<string, unknown>).projects;
+  if (!projects || typeof projects !== 'object' || Array.isArray(projects)) return empty;
+  const byShape = new Map<string, { entry: ServerEntry; paths: string[] }>();
+  let projectsWithServers = 0;
+  for (const [projPath, projVal] of Object.entries(projects as Record<string, unknown>)) {
+    if (!projVal || typeof projVal !== 'object' || Array.isArray(projVal)) continue;
+    const bag = (projVal as Record<string, unknown>).mcpServers;
+    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue;
+    const names = Object.keys(bag as Record<string, unknown>);
+    if (names.length === 0) continue;
+    projectsWithServers++;
+    for (const name of names) {
+      const entry = toServerEntry(name, (bag as Record<string, unknown>)[name]);
+      const key = entryShapeKey(entry);
+      const hit = byShape.get(key);
+      if (hit) {
+        if (!hit.paths.includes(projPath)) hit.paths.push(projPath);
+      } else {
+        byShape.set(key, { entry, paths: [projPath] });
+      }
+    }
+  }
+  const servers: ServerEntry[] = [];
+  for (const { entry, paths } of byShape.values()) {
+    entry.context = contextLabel(paths);
+    servers.push(entry);
+  }
+  return { servers, projects: projectsWithServers };
+}
+
 export interface ParseOutcome {
   ok: boolean;
   servers: ServerEntry[];
   diagnostics: Diagnostic[];
   caveat?: string;
+  /** Coverage note for non-obvious extractions (e.g. project-scoped servers folded in from ~/.claude.json). */
+  note?: string;
 }
 
 export function parseJsonConfig(
   text: string,
   file: string,
   clientId: string,
-  opts: { json5?: boolean; json5Fallback?: boolean } = {},
+  opts: { json5?: boolean; json5Fallback?: boolean; projectScope?: boolean } = {},
 ): ParseOutcome {
   const diagnostics: Diagnostic[] = [];
   const clean = text.replace(/^\uFEFF/, '');
@@ -317,7 +388,15 @@ export function parseJsonConfig(
     return { ok: false, servers: [], diagnostics };
   }
   const servers = extractServersFromJson(data);
-  return { ok: true, servers, diagnostics: [] };
+  let note: string | undefined;
+  if (opts.projectScope) {
+    const scope = extractClaudeProjectServers(data);
+    if (scope.servers.length > 0) {
+      servers.push(...scope.servers);
+      note = `${scope.servers.length} project-scoped server(s) from ${scope.projects} project(s)`;
+    }
+  }
+  return { ok: true, servers, diagnostics: [], note };
 }
 
 // ---------- TOML (minimal: [mcp_servers.*] tables) ----------
@@ -615,9 +694,20 @@ export function parseConfigFile(f: DiscoveredFile): ParsedConfig {
       ],
     };
   }
+  // Claude Code's ~/.claude.json also carries project-scoped server bags (projects.*.mcpServers).
+  const projectScope = f.clientId === 'claude-code' && f.scope === 'global';
   const r =
-    f.format === 'json' ? parseJsonConfig(text, f.file, f.clientId, { json5: f.json5, json5Fallback: f.json5Fallback })
+    f.format === 'json' ? parseJsonConfig(text, f.file, f.clientId, { json5: f.json5, json5Fallback: f.json5Fallback, projectScope })
     : f.format === 'toml' ? parseTomlConfig(text, f.file, f.clientId)
     : parseYamlLight(text, f.file, f.clientId);
-  return { clientId: f.clientId, file: f.file, format: f.format, ok: r.ok, caveat: r.caveat, servers: r.servers, diagnostics: r.diagnostics };
+  return {
+    clientId: f.clientId,
+    file: f.file,
+    format: f.format,
+    ok: r.ok,
+    caveat: r.caveat,
+    note: r.note,
+    servers: r.servers,
+    diagnostics: r.diagnostics,
+  };
 }
