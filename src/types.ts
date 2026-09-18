@@ -78,3 +78,21 @@ export interface ScanResult {
   parsed: ParsedConfig[];
   diagnostics: Diagnostic[];
 }
+
+// ---------- Fix engine (v0.1: mechanical JSON repairs) ----------
+
+export type FixStatus = 'fixed' | 'would-fix' | 'not-fixable' | 'skipped';
+
+export interface FixOutcome {
+  file: string;
+  clientId: string;
+  status: FixStatus;
+  /** Human-readable list of repairs applied (or that would be applied). */
+  changes: string[];
+  /** Path of the backup written before the fix (absent for dry runs and non-writes). */
+  backupPath?: string;
+  /** True when an earlier backup existed and was kept (the file had been backed up before). */
+  backupKept?: boolean;
+  /** Why nothing was written (for not-fixable / skipped). */
+  reason?: string;
+}

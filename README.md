@@ -2,14 +2,15 @@
 
 > **Pre-release — v0.1.0, not yet published to npm.** Repo under construction.
 
-**Triage broken MCP setups across agent clients.** One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and points to the fix.
+**Triage broken MCP setups across agent clients.** One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and — where it is safe — repairs it.
 
-Why *triage*: a triage assesses severity fast and routes the case — free checks for the issues you can fix yourself, and a human path for setups that need surgery.
+Why *triage*: a triage assesses severity fast and routes the case — a free check-and-fix pass for the mechanical problems, and a precise hint (plus a human path) for setups that need surgery.
 
 ## What it does
 
 - **Scans** (8 clients): Claude Desktop · Claude Code · Codex · Cursor · VS Code · Windsurf · OpenClaw · dsh
 - **Checks** (v0.1): JSON syntax (including the classic trailing comma), Codex-style TOML tables (basic), command resolvable on PATH, missing `${VAR}` / `process.env.VAR` references, relative-path arguments, plain `http://` remote URLs, transport/entry consistency (stdio needs a command, HTTP transports need a url, `serverName` required for dsh entries), cross-client drift for same-named servers
+- **Fixes** (opt-in `--fix`): mechanical repairs, only for files that fail to parse — strips JSON comments and trailing commas, re-verifies the result, keeps a `.mcp-triage.bak` backup. Everything else is escalated with a hint, never guessed at.
 - **JSON5-aware**: OpenClaw's `openclaw.json` is JSON5 (comments + trailing commas legal) and is parsed as such — no false syntax errors
 - **CLI-first**: runs even when your client cannot start — that is exactly when you need it
 - **Zero runtime dependencies**
@@ -20,9 +21,17 @@ Why *triage*: a triage assesses severity fast and routes the case — free check
 npx mcp-triage            # scan standard locations (all clients) + project configs in cwd
 npx mcp-triage --json     # machine-readable output
 npx mcp-triage --file ./my-config.json
+npx mcp-triage --fix              # repair files that fail to parse (comments / trailing commas)
+npx mcp-triage --fix --dry-run    # show what --fix would do; write nothing
 ```
 
-Exit codes: `0` = no error findings, `1` = at least one error finding.
+Exit codes: `0` = no error findings, `1` = at least one error finding (post-fix when `--fix` is used).
+
+### `--fix` semantics (v0.1)
+
+- Only files that **fail to parse** are fix candidates; healthy files are never rewritten.
+- Repairs are mechanical deletions only (comments, trailing commas). A repaired copy must parse as JSON or **nothing is written**.
+- Before the first write the original is saved as `<file>.mcp-triage.bak` (an existing backup is kept, never overwritten — so the pristine version survives repeated runs).
 
 ## Coverage notes & known limitations (v0.1)
 
@@ -35,10 +44,15 @@ Exit codes: `0` = no error findings, `1` = at least one error finding.
 
 ```bash
 npm install
-npm test          # node:test, 16 specs
+npm test          # node:test, 45 specs
 npm run build     # tsc → dist/
 node src/cli.ts scan
+node src/cli.ts scan --fix --dry-run
 ```
+
+The package is ESM with zero runtime dependencies; `src/index.ts` is the library entry
+(`import { discoverFiles, parseConfigFile, runChecks, applyFixes } from 'mcp-triage'`),
+`src/cli.ts` is the `mcp-triage` binary. `prepack` builds `dist/`; `prepublishOnly` runs the specs.
 
 ## License
 

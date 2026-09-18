@@ -42,6 +42,21 @@ Notes:
   runtime checks are skipped for disabled entries (reported as info).
 - Path resolution honors `OPENCLAW_CONFIG_PATH`.
 
+## Fix engine verification (2026-09-19)
+
+`--fix` was verified end-to-end against a fabricated three-client home on Windows (Node 22):
+
+| Case | File | Outcome |
+|---|---|---|
+| Comment + two trailing commas, strict-JSON client | `~/.cursor/mcp.json` | **fixed** — 1 comment stripped, 2 trailing commas removed; file re-parses (server detected); backup written |
+| Comment + missing comma, strict-JSON client | `~/.codeium/windsurf/mcp_config.json` | **not-fixable** — repaired copy still invalid; nothing written |
+| Valid JSON5 by design | `~/.openclaw/openclaw.json` | untouched; no findings |
+
+Guarantees exercised: dry-run wrote nothing; `--fix --json` emits a `fixes[]` array;
+a second fix of the same file kept the pristine existing backup (`backupKept: true`);
+the suite is 45/45 green; the packed tarball (23 files) installed into a fresh prefix ran
+`--version`, `scan`, and the library entry from the installed copy.
+
 ## What is NOT covered yet (planned)
 
 - Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`).

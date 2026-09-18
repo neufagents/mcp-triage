@@ -89,8 +89,8 @@ function stripCommentsAndSingleQuotes(text: string): string {
   return out;
 }
 
-/** Pass 2: drop trailing commas before } or ] (outside strings). */
-function stripTrailingCommas(text: string): string {
+/** Pass 2: drop trailing commas before } or ] (outside strings). Also used by the fix engine. */
+export function stripTrailingCommas(text: string): string {
   let out = '';
   let inString = false;
   for (let i = 0; i < text.length; i++) {

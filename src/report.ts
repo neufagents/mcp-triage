@@ -2,7 +2,7 @@
 
 import os from 'node:os';
 import { CLIENTS } from './clients.ts';
-import type { Diagnostic, DiscoveredFile, ParsedConfig, Severity } from './types.ts';
+import type { Diagnostic, DiscoveredFile, FixOutcome, ParsedConfig, Severity } from './types.ts';
 
 export interface ReportInput {
   files: DiscoveredFile[];
@@ -12,6 +12,12 @@ export interface ReportInput {
 
 const ORDER: Severity[] = ['error', 'warning', 'info'];
 const LABEL: Record<Severity, string> = { error: 'ERROR', warning: 'WARN ', info: 'INFO ' };
+const FIX_LABEL: Record<FixOutcome['status'], string> = {
+  fixed: 'FIXED',
+  'would-fix': 'DRY  ',
+  'not-fixable': 'NOFIX',
+  skipped: 'SKIP ',
+};
 
 export function tilde(p: string): string {
   const home = os.homedir();
@@ -22,7 +28,7 @@ function clientName(id: string): string {
   return CLIENTS.find((c) => c.id === id)?.name ?? id;
 }
 
-export function renderHuman(input: ReportInput, version: string): string {
+export function renderHuman(input: ReportInput, version: string, fixes?: FixOutcome[]): string {
   const lines: string[] = [];
   lines.push(`MCP Triage v${version} — scanned ${input.files.length} config file(s)`);
   lines.push('');
@@ -54,6 +60,24 @@ export function renderHuman(input: ReportInput, version: string): string {
     }
   }
 
+  if (fixes !== undefined) {
+    lines.push('');
+    if (fixes.length === 0) {
+      lines.push('Fix results: no repair candidates — no scanned file failed to parse.');
+    } else {
+      const dry = fixes.some((f) => f.status === 'would-fix');
+      lines.push(dry ? 'Fix results (dry run — nothing written):' : 'Fix results:');
+      for (const f of fixes) {
+        const what = f.changes.length > 0 ? `: ${f.changes.join(', ')}` : '';
+        lines.push(`  [${FIX_LABEL[f.status]}] ${clientName(f.clientId)} — ${tilde(f.file)}${what}`);
+        if (f.reason) lines.push(`           → ${f.reason}`);
+        if (f.backupPath) {
+          lines.push(`           → backup: ${tilde(f.backupPath)}${f.backupKept ? ' (existing backup kept)' : ''}`);
+        }
+      }
+    }
+  }
+
   const counts = { error: 0, warning: 0, info: 0 };
   for (const d of input.diagnostics) counts[d.severity]++;
   const servers = input.parsed.reduce((a, p) => a + p.servers.length, 0);
@@ -64,7 +88,7 @@ export function renderHuman(input: ReportInput, version: string): string {
   return lines.join('\n');
 }
 
-export function renderJson(input: ReportInput, version: string): string {
+export function renderJson(input: ReportInput, version: string, fixes?: FixOutcome[]): string {
   const counts = { error: 0, warning: 0, info: 0 };
   for (const d of input.diagnostics) counts[d.severity]++;
   return JSON.stringify(
@@ -82,6 +106,7 @@ export function renderJson(input: ReportInput, version: string): string {
         servers: p.servers.map((s) => ({ name: s.name, command: s.command, url: s.url, transport: s.transport })),
       })),
       diagnostics: input.diagnostics,
+      ...(fixes !== undefined ? { fixes } : {}),
       summary: { counts, servers: input.parsed.reduce((a, p) => a + p.servers.length, 0), files: input.files.length },
     },
     null,
