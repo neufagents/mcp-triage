@@ -1,6 +1,6 @@
 # MCP Triage
 
-[![npm version](https://img.shields.io/npm/v/mcp-triage.svg)](https://www.npmjs.com/package/mcp-triage) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![CI](https://github.com/neufagents/mcp-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/neufagents/mcp-triage/actions/workflows/ci.yml) [![npm version](https://img.shields.io/npm/v/mcp-triage.svg)](https://www.npmjs.com/package/mcp-triage) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 **Triage broken MCP setups across agent clients.** A [NeufAgents](https://neufagents.com) tool. One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and — where it is safe — repairs it.
 
@@ -99,6 +99,8 @@ node src/cli.ts scan --fix --dry-run
 
 The dev and test scripts import `.ts` files directly, so they need Node 22.18+. The published package
 itself supports Node 20+ (`engines`) and its `scan` / `--fix` flows are smoke-tested on Node 20.19.
+
+CI runs the full spec suite on Node 22 and a build + `--version` smoke on Node 20 on every push and pull request.
 
 The package is ESM with zero runtime dependencies; `src/index.ts` is the library entry
 (`import { discoverFiles, parseConfigFile, runChecks, applyFixes } from 'mcp-triage'`),
