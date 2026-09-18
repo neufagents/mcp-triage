@@ -49,12 +49,16 @@ export function discoverFiles(cwd: string, ctx: PathContext = defaultPathContext
   for (const spec of CLIENTS) {
     for (const p of clientPathsForPlatform(spec, ctx)) {
       for (const f of expandGlob(p)) {
-        if (isFile(f)) push({ clientId: spec.id, file: f, format: spec.format, scope: 'global' });
+        if (isFile(f)) push({ clientId: spec.id, file: f, format: spec.format, scope: 'global', json5: spec.json5 });
       }
+    }
+    if (spec.envOverride && ctx.env?.[spec.envOverride]) {
+      const f = path.resolve(ctx.env[spec.envOverride] as string);
+      if (isFile(f)) push({ clientId: spec.id, file: f, format: spec.format, scope: 'global', json5: spec.json5 });
     }
     for (const rel of spec.projectPaths ?? []) {
       const f = path.join(cwd, rel);
-      if (isFile(f)) push({ clientId: spec.id, file: f, format: spec.format, scope: 'project' });
+      if (isFile(f)) push({ clientId: spec.id, file: f, format: spec.format, scope: 'project', json5: spec.json5 });
     }
   }
   return out;

@@ -51,7 +51,7 @@ const fileIdx = argv.indexOf('--file');
 let files: DiscoveredFile[];
 if (fileIdx >= 0 && argv[fileIdx + 1]) {
   const f = path.resolve(argv[fileIdx + 1]);
-  files = [{ clientId: 'custom', file: f, format: guessFormat(f), scope: 'project' }];
+  files = [{ clientId: 'custom', file: f, format: guessFormat(f), scope: 'project', json5Fallback: true }];
 } else {
   files = discoverFiles(cwd);
 }

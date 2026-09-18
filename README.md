@@ -9,7 +9,8 @@ Why *triage*: a triage assesses severity fast and routes the case — free check
 ## What it does
 
 - **Scans** (8 clients): Claude Desktop · Claude Code · Codex · Cursor · VS Code · Windsurf · OpenClaw · dsh
-- **Checks** (v0.1): JSON syntax (including the classic trailing comma), Codex-style TOML tables (basic), command resolvable on PATH, missing `${VAR}` references, relative-path arguments, plain `http://` remote URLs, cross-client drift for same-named servers
+- **Checks** (v0.1): JSON syntax (including the classic trailing comma), Codex-style TOML tables (basic), command resolvable on PATH, missing `${VAR}` / `process.env.VAR` references, relative-path arguments, plain `http://` remote URLs, transport/entry consistency (stdio needs a command, HTTP transports need a url, `serverName` required for dsh entries), cross-client drift for same-named servers
+- **JSON5-aware**: OpenClaw's `openclaw.json` is JSON5 (comments + trailing commas legal) and is parsed as such — no false syntax errors
 - **CLI-first**: runs even when your client cannot start — that is exactly when you need it
 - **Zero runtime dependencies**
 
@@ -25,9 +26,10 @@ Exit codes: `0` = no error findings, `1` = at least one error finding.
 
 ## Coverage notes & known limitations (v0.1)
 
-- JSON clients: full parsing. TOML (Codex): **basic** — `[mcp_servers.*]` tables only. YAML (dsh cordis profiles): **light** — line-based extraction of `@deepseek-ai/dsh-mcp-client` entries.
+- All 8 client paths are verified against official docs and/or a real machine (verification log: `docs/verification-log.md` in the repo). OpenClaw paths additionally honor `OPENCLAW_CONFIG_PATH`; VS Code includes the remote/WSL user config (`~/.vscode-server/data/User/mcp.json`).
+- JSON clients: full parsing (OpenClaw: JSON5-light — comments and trailing commas; exotic JSON5 beyond that still fails). TOML (Codex): **basic** — `[mcp_servers.*]` tables only. YAML (dsh cordis profiles): **light** — per-entry extraction of `@deepseek-ai/dsh-mcp-client` patch entries (serverName, transport, command, args, env, cwd; `!!js` expressions kept as text for reference checks).
 - Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`) are **not yet scanned** (v0.1.1).
-- VS Code / OpenClaw / dsh paths are pending a docs verification pass before release.
+- `--file` on a file we cannot attribute to a client: if it only parses as JSON5, you get an **info** saying so (not an error) — strict-JSON clients would reject such a file.
 
 ## Development
 

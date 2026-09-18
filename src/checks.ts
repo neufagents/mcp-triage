@@ -48,11 +48,11 @@ export function resolveCommandOnPath(cmd: string, ctx: CheckContext): string | n
   return null;
 }
 
-const ENV_REF_RE = /\$\{(?:env:)?([A-Za-z_][A-Za-z0-9_]*)\}/g;
+const ENV_REF_RE = /\$\{(?:env:)?([A-Za-z_][A-Za-z0-9_]*)\}|process\.env\.([A-Za-z_][A-Za-z0-9_]*)/g;
 
 export function findEnvRefs(s: string): string[] {
   const out: string[] = [];
-  for (const m of s.matchAll(ENV_REF_RE)) out.push(m[1]);
+  for (const m of s.matchAll(ENV_REF_RE)) out.push((m[1] ?? m[2]) as string);
   return out;
 }
 
@@ -70,6 +70,17 @@ function checkServer(clientId: string, file: string, s: ServerEntry, ctx: CheckC
   const diags: Diagnostic[] = [];
   const base = { clientId, file, serverName: s.name };
 
+  if (s.enabled === false) {
+    diags.push({
+      checkId: 'server.disabled',
+      severity: 'info',
+      title: 'Server is disabled (enabled: false) — runtime checks skipped',
+      ...base,
+      hint: 'OpenClaw keeps disabled definitions without connecting them. Remove `enabled: false` to activate.',
+    });
+    return diags;
+  }
+
   if (!s.command && !s.url) {
     diags.push({
       checkId: 'server.command-missing',
@@ -79,6 +90,36 @@ function checkServer(clientId: string, file: string, s: ServerEntry, ctx: CheckC
       hint: 'Add a command (stdio) or a url (remote). This entry is inert as written.',
     });
     return diags;
+  }
+
+  const KNOWN_TRANSPORTS = ['stdio', 'streamable-http', 'sse', 'http'];
+  const t = s.transport?.toLowerCase();
+  if (t && !KNOWN_TRANSPORTS.includes(t)) {
+    diags.push({
+      checkId: 'server.transport-unknown',
+      severity: 'warning',
+      title: `Unknown transport "${s.transport}"`,
+      ...base,
+      hint: 'Expected one of: stdio, streamable-http, sse, http. The client may reject the entry or fall back to a default.',
+    });
+  }
+  if (t === 'stdio' && s.command === undefined) {
+    diags.push({
+      checkId: 'server.stdio-command-missing',
+      severity: 'error',
+      title: 'transport is "stdio" but no command is set',
+      ...base,
+      hint: 'stdio servers must name the executable to spawn (e.g. command: npx). Add it, or switch to an http transport with a url.',
+    });
+  }
+  if (t && ['streamable-http', 'sse', 'http'].includes(t) && s.url === undefined) {
+    diags.push({
+      checkId: 'server.http-url-missing',
+      severity: 'error',
+      title: `transport is "${s.transport}" but no url is set`,
+      ...base,
+      hint: 'HTTP transports must point at an endpoint (url: https://.../mcp). Add it, or use a stdio command instead.',
+    });
   }
 
   if (s.command) {

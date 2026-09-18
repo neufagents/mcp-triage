@@ -57,3 +57,30 @@ test('expandGlob handles single-star segments', () => {
   assert.equal(out.length, 1);
   assert.ok(out[0].endsWith('x.yml'));
 });
+
+test('registry: vscode remote path, openclaw json5 + env override are declared', () => {
+  const vscode = CLIENTS.find((c) => c.id === 'vscode')!;
+  assert.ok(vscode.paths.linux?.some((p) => p.includes('.vscode-server')));
+  assert.ok(vscode.paths.darwin?.some((p) => p.includes('.vscode-server')));
+  const openclaw = CLIENTS.find((c) => c.id === 'openclaw')!;
+  assert.equal(openclaw.json5, true);
+  assert.equal(openclaw.envOverride, 'OPENCLAW_CONFIG_PATH');
+});
+
+test('discoverFiles honors OPENCLAW_CONFIG_PATH override', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'triage-oc-'));
+  const cfg = path.join(tmp, 'custom-openclaw.json');
+  fs.writeFileSync(cfg, '{}');
+  const ctx: PathContext = {
+    platform: 'linux',
+    home: path.join(tmp, 'home'),
+    appdata: path.join(tmp, 'appdata'),
+    configDir: path.join(tmp, '.config'),
+    env: { OPENCLAW_CONFIG_PATH: cfg },
+  };
+  const found = discoverFiles(path.join(tmp, 'proj'), ctx);
+  const hit = found.find((f) => f.clientId === 'openclaw');
+  assert.ok(hit, 'openclaw file from env override should be discovered');
+  assert.equal(hit!.file, path.resolve(cfg));
+  assert.equal(hit!.json5, true);
+});

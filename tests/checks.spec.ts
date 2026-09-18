@@ -50,6 +50,40 @@ test('check: insecure http url is a warning', () => {
   assert.ok(d.some((x) => x.checkId === 'server.url-insecure'));
 });
 
+test('check: stdio transport without command is an error', () => {
+  const d = runChecks([wrap('dsh', [{ name: 'gh', transport: 'stdio', url: 'http://x' }])], baseCtx({ env: { PATH: '' } }));
+  assert.ok(d.some((x) => x.checkId === 'server.stdio-command-missing' && x.severity === 'error'));
+});
+
+test('check: http transport without url is an error', () => {
+  const d = runChecks([wrap('openclaw', [{ name: 'docs', transport: 'streamable-http', command: 'node' }])], baseCtx({ env: { PATH: '' } }));
+  assert.ok(d.some((x) => x.checkId === 'server.http-url-missing' && x.severity === 'error'));
+});
+
+test('check: unknown transport warns', () => {
+  const d = runChecks([wrap('x', [{ name: 's', transport: 'grpc', command: 'node' }])], baseCtx({ env: { PATH: '' } }));
+  assert.ok(d.some((x) => x.checkId === 'server.transport-unknown' && x.severity === 'warning'));
+});
+
+test('check: disabled server (enabled:false) skips runtime checks', () => {
+  const d = runChecks(
+    [wrap('openclaw', [{ name: 'lazy', command: 'no-such-cmd-xyz-123', enabled: false }])],
+    baseCtx({ env: { PATH: '' } }),
+  );
+  assert.equal(d.length, 1);
+  assert.equal(d[0].checkId, 'server.disabled');
+});
+
+test('check: process.env refs (dsh) are detected when the var is missing', () => {
+  const d = runChecks(
+    [wrap('dsh', [{ name: 'gh', command: 'npx', env: { GITHUB_TOKEN: 'process.env.DEFINITELY_MISSING_TOKEN' } }])],
+    baseCtx({ env: { PATH: '' } }),
+  );
+  const envDiag = d.find((x) => x.checkId === 'server.env-ref-missing');
+  assert.ok(envDiag);
+  assert.match(envDiag.title, /DEFINITELY_MISSING_TOKEN/);
+});
+
 test('drift: same server name with different shapes across clients is info', () => {
   const a = wrap('cursor', [{ name: 'github', command: 'npx', args: ['-y', 'gh-v1'] }]);
   const b = wrap('codex', [{ name: 'github', command: 'npx', args: ['-y', 'gh-v2'] }]);

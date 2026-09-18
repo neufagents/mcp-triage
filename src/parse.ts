@@ -1,4 +1,5 @@
-// Config parsers. JSON: full. TOML: minimal (codex-style [mcp_servers.*] tables). YAML: light (dsh cordis profiles).
+// Config parsers. JSON: full (+ JSON5-light for OpenClaw). TOML: minimal (codex-style [mcp_servers.*] tables).
+// YAML: light (dsh cordis profiles: @deepseek-ai/dsh-mcp-client patch entries).
 // Partial parsers set `caveat` and stay honest in the report.
 
 import fs from 'node:fs';
@@ -13,6 +14,186 @@ export function readFileSafe(file: string): string | null {
 }
 
 // ---------- JSON ----------
+
+/**
+ * JSON5-light normalization: strips // and block comments and trailing commas outside strings,
+ * converts single-quoted strings to double-quoted, and quotes unquoted identifier keys.
+ * Covers what OpenClaw documents as legal JSON5 (comments + trailing commas; the parser also
+ * accepts unquoted keys). Deliberately light: exotic JSON5 beyond this (hex numbers, multiline
+ * strings, +/- Infinity) is out of scope and will still fail JSON.parse.
+ */
+export function normalizeJson5(text: string): string {
+  return quoteUnquotedKeys(stripTrailingCommas(stripCommentsAndSingleQuotes(text)));
+}
+
+/** Pass 1: strip comments; convert single-quoted strings to double-quoted. */
+function stripCommentsAndSingleQuotes(text: string): string {
+  let out = '';
+  let inString = false;
+  let quote = '"';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (quote === "'") {
+        // Convert content to a double-quoted scalar.
+        if (c === '\\' && i + 1 < text.length) {
+          const n = text[i + 1];
+          if (n === "'") out += "'";
+          else out += '\\' + n;
+          i++;
+          continue;
+        }
+        if (c === "'") {
+          out += '"';
+          inString = false;
+          continue;
+        }
+        if (c === '"') out += '\\"';
+        else out += c;
+        continue;
+      }
+      out += c;
+      if (c === '\\' && i + 1 < text.length) {
+        out += text[i + 1];
+        i++;
+        continue;
+      }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      quote = '"';
+      out += c;
+      continue;
+    }
+    if (c === "'") {
+      inString = true;
+      quote = "'";
+      out += '"';
+      continue;
+    }
+    if (c === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i++;
+      out += '\n';
+      continue;
+    }
+    if (c === '/' && text[i + 1] === '*') {
+      i += 2;
+      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i++;
+      i++; // skip the closing '/'
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
+/** Pass 2: drop trailing commas before } or ] (outside strings). */
+function stripTrailingCommas(text: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === '\\' && i + 1 < text.length) {
+        out += text[i + 1];
+        i++;
+        continue;
+      }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+      continue;
+    }
+    if (c === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (text[j] === '}' || text[j] === ']') continue; // drop the comma
+    }
+    out += c;
+  }
+  return out;
+}
+
+/** Pass 3: quote unquoted identifier keys ({ foo: 1 } → { "foo": 1 }). Strings are double-quoted by now. */
+function quoteUnquotedKeys(text: string): string {
+  let out = '';
+  let inString = false;
+  const stack: Array<'obj' | 'arr'> = [];
+  let expectKey = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === '\\' && i + 1 < text.length) {
+        out += text[i + 1];
+        i++;
+        continue;
+      }
+      if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+      continue;
+    }
+    if (c === '{') {
+      stack.push('obj');
+      expectKey = true;
+      out += c;
+      continue;
+    }
+    if (c === '[') {
+      stack.push('arr');
+      expectKey = false;
+      out += c;
+      continue;
+    }
+    if (c === '}' || c === ']') {
+      stack.pop();
+      expectKey = false;
+      out += c;
+      continue;
+    }
+    if (c === ',') {
+      expectKey = stack[stack.length - 1] === 'obj';
+      out += c;
+      continue;
+    }
+    if (c === ':') {
+      expectKey = false;
+      out += c;
+      continue;
+    }
+    if (expectKey && /[A-Za-z_$]/.test(c)) {
+      let j = i;
+      let tok = '';
+      while (j < text.length && /[A-Za-z0-9_$]/.test(text[j])) {
+        tok += text[j];
+        j++;
+      }
+      let k = j;
+      while (k < text.length && /\s/.test(text[k])) k++;
+      if (text[k] === ':') {
+        out += '"' + tok + '"';
+        i = j - 1;
+        continue;
+      }
+      // Not a key (e.g. a bare literal in an odd spot) — leave untouched.
+      out += tok;
+      i = j - 1;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
 
 export function findTrailingComma(text: string): { line: number; snippet: string } | null {
   const re = /,\s*[}\]]/g;
@@ -37,7 +218,11 @@ function toServerEntry(name: string, v: unknown): ServerEntry {
   }
   if (typeof o.url === 'string') entry.url = o.url;
   if (typeof o.transport === 'string') entry.transport = o.transport;
+  else if (typeof o.type === 'string' && ['stdio', 'streamable-http', 'sse', 'http'].includes(o.type.toLowerCase())) {
+    entry.transport = o.type; // VS Code & co. spell the transport "type"
+  }
   if (typeof o.cwd === 'string') entry.cwd = o.cwd;
+  if (typeof o.enabled === 'boolean') entry.enabled = o.enabled;
   return entry;
 }
 
@@ -64,13 +249,47 @@ export interface ParseOutcome {
   caveat?: string;
 }
 
-export function parseJsonConfig(text: string, file: string, clientId: string): ParseOutcome {
+export function parseJsonConfig(
+  text: string,
+  file: string,
+  clientId: string,
+  opts: { json5?: boolean; json5Fallback?: boolean } = {},
+): ParseOutcome {
   const diagnostics: Diagnostic[] = [];
   const clean = text.replace(/^\uFEFF/, '');
   let data: unknown;
   try {
     data = JSON.parse(clean);
   } catch (e) {
+    if (opts.json5 || opts.json5Fallback) {
+      try {
+        const normalized = normalizeJson5(clean);
+        data = JSON.parse(normalized);
+        const servers = extractServersFromJson(data);
+        if (opts.json5) {
+          // The client accepts JSON5 by design (OpenClaw) — no finding.
+          return { ok: true, servers, diagnostics: [], caveat: 'json5-light' };
+        }
+        // Unknown client (explicit --file): report exactly what we found, don't guess.
+        return {
+          ok: true,
+          servers,
+          caveat: 'json5-light',
+          diagnostics: [
+            {
+              checkId: 'config.json5-only',
+              severity: 'info',
+              title: 'Valid JSON5, but not strict JSON (comments and/or trailing commas)',
+              hint: 'Fine for OpenClaw (JSON5 by design). Strict-JSON clients (Claude Desktop, Cursor, VS Code, …) will reject this file — remove comments and trailing commas if it feeds one of them.',
+              clientId,
+              file,
+            },
+          ],
+        };
+      } catch {
+        // fall through to the diagnostics below, reported from the strict error
+      }
+    }
     const msg = e instanceof Error ? e.message : String(e);
     const trailing = findTrailingComma(clean);
     if (trailing) {
@@ -185,25 +404,199 @@ export function parseTomlConfig(text: string, file: string, clientId: string): P
 }
 
 // ---------- YAML (light: dsh cordis profiles, @deepseek-ai/dsh-mcp-client entries) ----------
+//
+// dsh MCP servers are patch entries shaped like:
+//   - id: mcp-github
+//     name: '@deepseek-ai/dsh-mcp-client'
+//     config:
+//       serverName: github
+//       transport: stdio            # stdio | streamable-http
+//       command: npx
+//       args: ['-y', '@modelcontextprotocol/server-github']   # inline or block sequence
+//       env:
+//         GITHUB_TOKEN: !!js process.env.GITHUB_TOKEN          # block map; !!js expressions kept as text
+// (Source: @deepseek-ai/dsh-mcp-client README, v0.1.5-rc.2.)
+
+/** Strip a YAML cast prefix like `!!js ` from a scalar. */
+function stripCast(v: string): string {
+  return v.replace(/^!!js\s+/, '').trim();
+}
+
+/** Remove a trailing ` # comment` from a plain scalar (leaves # inside quotes alone). */
+function stripInlineComment(t: string): string {
+  let inS = false;
+  let q = '';
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (inS) {
+      if (c === '\\') {
+        i++;
+        continue;
+      }
+      if (c === q) inS = false;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inS = true;
+      q = c;
+      continue;
+    }
+    if (c === '#' && i > 0 && /\s/.test(t[i - 1])) return t.slice(0, i).trimEnd();
+  }
+  return t;
+}
+
+/** Parse a YAML/JSON-ish scalar to a plain string. */
+function yamlScalar(raw: string): string {
+  return unquote(stripCast(stripInlineComment(raw).trim())).trim();
+}
+
+/** Split a flow collection body on top-level commas (ignores commas inside quotes). */
+function splitFlow(body: string): string[] {
+  const parts: string[] = [];
+  let cur = '';
+  let inS = false;
+  let q = '';
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (inS) {
+      cur += c;
+      if (c === '\\') {
+        cur += body[i + 1] ?? '';
+        i++;
+        continue;
+      }
+      if (c === q) inS = false;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inS = true;
+      q = c;
+      cur += c;
+      continue;
+    }
+    if (c === ',') {
+      parts.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += c;
+  }
+  if (cur.trim() !== '' || parts.length > 0) parts.push(cur);
+  return parts.map((p) => p.trim()).filter((p) => p !== '');
+}
+
+/** Parse an inline array body (without brackets) into strings. Unquoted tokens are kept as-is. */
+function parseFlowArray(body: string): string[] {
+  return splitFlow(body).map((p) => yamlScalar(p));
+}
+
+/** Parse an inline map body (without braces) into string values. */
+function parseFlowMap(body: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of splitFlow(body)) {
+    const m = part.match(/^("[^"]*"|'[^']*'|[A-Za-z0-9_.-]+)\s*:\s*(.*)$/);
+    if (m) out[unquote(m[1])] = yamlScalar(m[2]);
+  }
+  return out;
+}
+
+function chunkIndent(line: string): number {
+  const m = line.match(/^(\s*)/);
+  return m ? m[1].length : 0;
+}
 
 export function parseYamlLight(text: string, file: string, clientId: string): ParseOutcome {
   const servers: ServerEntry[] = [];
-  const chunks = text.split(/\n(?=\s*-\s*id:)/);
+  const diagnostics: Diagnostic[] = [];
+  const normalized = text.replace(/\r\n/g, '\n');
+  // Each patch entry starts at a `- id:` list item (any indent, e.g. nested under `insert:`).
+  const chunks = normalized.split(/\n(?=\s*-\s+id:)/);
   for (const chunk of chunks) {
     if (!chunk.includes('dsh-mcp-client')) continue;
     const idMatch = chunk.match(/-\s*id:\s*(\S+)/);
-    const serverName = chunk.match(/serverName:\s*(.+)/)?.[1]?.trim();
-    const transport = chunk.match(/transport:\s*(\S+)/)?.[1]?.trim();
-    const command = chunk.match(/command:\s*(.+)/)?.[1]?.trim();
-    const url = chunk.match(/url:\s*(\S+)/)?.[1]?.trim();
-    const name = serverName ? unquote(serverName) : idMatch ? `dsh:${idMatch[1]}` : 'dsh-mcp-client';
-    const entry: ServerEntry = { name };
-    if (command) entry.command = unquote(command);
-    if (url) entry.url = unquote(url);
-    if (transport) entry.transport = unquote(transport);
+    const entry: ServerEntry = { name: 'dsh-mcp-client' };
+    const lines = chunk.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const keyMatch = line.match(/^(\s*)([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/);
+      if (!keyMatch) continue;
+      const [, indent, key, restRaw] = keyMatch;
+      const rest = restRaw.trim();
+
+      if (key === 'serverName' && rest) {
+        entry.name = yamlScalar(rest) || entry.name;
+      } else if (key === 'transport' && rest) {
+        entry.transport = yamlScalar(rest);
+      } else if (key === 'command' && rest) {
+        entry.command = yamlScalar(rest);
+      } else if (key === 'url' && rest) {
+        entry.url = yamlScalar(rest);
+      } else if (key === 'cwd' && rest) {
+        entry.cwd = yamlScalar(rest);
+      } else if (key === 'args') {
+        if (rest && rest.startsWith('[')) {
+          entry.args = parseFlowArray(rest.replace(/^\[/, '').replace(/\]\s*$/, ''));
+        } else {
+          const items: string[] = [];
+          const keyIndent = indent.length;
+          for (let j = i + 1; j < lines.length; j++) {
+            const l = lines[j];
+            if (l.trim() === '') continue;
+            if (chunkIndent(l) <= keyIndent) break;
+            const m = l.match(/^\s*-\s+(.*)$/);
+            if (!m) break;
+            items.push(yamlScalar(m[1]));
+          }
+          if (items.length > 0) entry.args = items;
+        }
+      } else if (key === 'env') {
+        const env: Record<string, string> = {};
+        if (rest.startsWith('{')) {
+          Object.assign(env, parseFlowMap(rest.replace(/^\{/, '').replace(/\}\s*$/, '')));
+        } else {
+          const keyIndent = indent.length;
+          for (let j = i + 1; j < lines.length; j++) {
+            const l = lines[j];
+            if (l.trim() === '') continue;
+            if (chunkIndent(l) <= keyIndent) break;
+            const m = l.match(/^\s+([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+            if (!m) continue;
+            env[m[1]] = yamlScalar(m[2]);
+          }
+        }
+        if (Object.keys(env).length > 0) entry.env = env;
+      }
+    }
+
+    const idTail = idMatch ? idMatch[1] : undefined;
+    if (entry.name === 'dsh-mcp-client' && idTail) entry.name = `dsh:${idTail}`;
+    const serverNameMatch = chunk.match(/^\s*serverName:\s*(\S.*)$/m);
+    if (!serverNameMatch) {
+      diagnostics.push({
+        checkId: 'dsh.serverName-missing',
+        severity: 'error',
+        title: 'dsh MCP entry has no serverName — the entry will fail to load',
+        detail: idTail ? `entry id: ${idTail}` : undefined,
+        clientId,
+        file,
+        hint: "Add `serverName: <short-name>` (required, [A-Za-z0-9_-]{1,32}) — it namespaces the server's tools as mcp__<serverName>__<tool>.",
+      });
+    } else if (!/^[A-Za-z0-9_-]{1,32}$/.test(entry.name)) {
+      diagnostics.push({
+        checkId: 'dsh.serverName-invalid',
+        severity: 'warning',
+        title: `serverName "${entry.name}" does not match [A-Za-z0-9_-]{1,32}`,
+        clientId,
+        file,
+        serverName: entry.name,
+        hint: 'Use letters, digits, _ and - only (max 32 chars); names become model-facing tool prefixes.',
+      });
+    }
     servers.push(entry);
   }
-  return { ok: true, servers, diagnostics: [], caveat: 'yaml-light' };
+  return { ok: true, servers, diagnostics, caveat: 'yaml-light' };
 }
 
 // ---------- Entry ----------
@@ -223,7 +616,7 @@ export function parseConfigFile(f: DiscoveredFile): ParsedConfig {
     };
   }
   const r =
-    f.format === 'json' ? parseJsonConfig(text, f.file, f.clientId)
+    f.format === 'json' ? parseJsonConfig(text, f.file, f.clientId, { json5: f.json5, json5Fallback: f.json5Fallback })
     : f.format === 'toml' ? parseTomlConfig(text, f.file, f.clientId)
     : parseYamlLight(text, f.file, f.clientId);
   return { clientId: f.clientId, file: f.file, format: f.format, ok: r.ok, caveat: r.caveat, servers: r.servers, diagnostics: r.diagnostics };

@@ -1,6 +1,15 @@
 // Client registry: 8 clients x config locations.
-// Paths verified against this machine where available (see research/2026-09-19-mcp-建前复核与命名决策.md §3).
-// `verify: true` = path/format still needs an official-docs check before release.
+// Path verification round (2026-09-19, night cycle): all 8 verified against official docs
+// and/or this machine. Sources per entry. `verify: true` marks entries NOT yet verified.
+//
+// Sources:
+// - VS Code: code.visualstudio.com/docs/agents/reference/mcp-configuration (mcp.json; user profile via
+//   "MCP: Open User Configuration"; workspace .vscode/mcp.json; servers key). Remote/WSL path
+//   ~/.vscode-server/data/User/mcp.json confirmed via StackOverflow 79706687 + microsoft/vscode#256546.
+// - OpenClaw: docs.openclaw.ai/gateway/configuration (JSON5 config at ~/.openclaw/openclaw.json,
+//   path overridable via OPENCLAW_CONFIG_PATH) + docs.openclaw.ai/tools/mcp (mcp.servers map).
+// - dsh: machine-verified 2026-09-19 (~/.dsh/profiles/{headless,web}/cordis{,.patch}.yml exist locally)
+//   + @deepseek-ai/dsh-mcp-client@0.1.5-rc.2 README (patch entry: name + config.{serverName,transport,...}).
 
 import os from 'node:os';
 import path from 'node:path';
@@ -53,12 +62,12 @@ export const CLIENTS: ClientSpec[] = [
     format: 'json',
     paths: {
       win32: ['<appdata>/Code/User/mcp.json'],
-      darwin: ['<home>/Library/Application Support/Code/User/mcp.json'],
-      linux: ['<config>/Code/User/mcp.json'],
+      // Remote/WSL sessions keep the user config on the server side (~/.vscode-server/data/User/).
+      darwin: ['<home>/Library/Application Support/Code/User/mcp.json', '<home>/.vscode-server/data/User/mcp.json'],
+      linux: ['<config>/Code/User/mcp.json', '<home>/.vscode-server/data/User/mcp.json'],
     },
     projectPaths: ['.vscode/mcp.json'],
     serversHint: 'servers',
-    verify: true,
   },
   {
     id: 'windsurf',
@@ -73,11 +82,12 @@ export const CLIENTS: ClientSpec[] = [
     id: 'openclaw',
     name: 'OpenClaw',
     format: 'json',
+    json5: true,
+    envOverride: 'OPENCLAW_CONFIG_PATH',
     paths: {
       any: ['<home>/.openclaw/openclaw.json', '<config>/openclaw/config.json'],
     },
-    serversHint: 'mcpServers | mcp.servers',
-    verify: true,
+    serversHint: 'mcp.servers (older guides may show mcpServers)',
   },
   {
     id: 'dsh',
@@ -86,8 +96,7 @@ export const CLIENTS: ClientSpec[] = [
     paths: {
       any: ['<home>/.dsh/profiles/*/cordis.patch.yml', '<home>/.dsh/profiles/*/cordis.yml'],
     },
-    serversHint: '@deepseek-ai/dsh-mcp-client plugin entries',
-    verify: true,
+    serversHint: '@deepseek-ai/dsh-mcp-client patch entries (config.serverName/transport/command/args/env)',
   },
 ];
 
@@ -96,6 +105,8 @@ export interface PathContext {
   home: string;
   appdata: string;
   configDir: string;
+  /** Process env (used for path overrides like OPENCLAW_CONFIG_PATH). Optional for tests. */
+  env?: NodeJS.ProcessEnv;
 }
 
 export function defaultPathContext(): PathContext {
@@ -105,6 +116,7 @@ export function defaultPathContext(): PathContext {
     home,
     appdata: process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'),
     configDir: path.join(home, '.config'),
+    env: process.env,
   };
 }
 

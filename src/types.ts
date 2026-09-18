@@ -26,6 +26,8 @@ export interface ServerEntry {
   url?: string;
   transport?: string;
   cwd?: string;
+  /** Explicitly disabled entries (OpenClaw `enabled: false`) — kept but not connected; runtime checks are skipped. */
+  enabled?: boolean;
 }
 
 export interface ParsedConfig {
@@ -52,7 +54,11 @@ export interface ClientSpec {
   projectPaths?: string[];
   /** Where server entries live in the file (informational) */
   serversHint: string;
-  /** True when the path/format is not yet verified against official docs (pre-release) */
+  /** File format is JSON5 (comments + trailing commas are legal) — parse leniently. */
+  json5?: boolean;
+  /** Env var that overrides the config path (e.g. OPENCLAW_CONFIG_PATH); scanned in addition when set. */
+  envOverride?: string;
+  /** True when the path/format is not yet verified against official docs (pre-release). */
   verify?: boolean;
 }
 
@@ -61,6 +67,10 @@ export interface DiscoveredFile {
   file: string;
   format: Format;
   scope: 'global' | 'project';
+  /** Inherited from the client spec (JSON5-tolerant parsing). */
+  json5?: boolean;
+  /** Unknown client (e.g. explicit --file): try a JSON5 fallback and report it as info when it applies. */
+  json5Fallback?: boolean;
 }
 
 export interface ScanResult {
