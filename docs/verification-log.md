@@ -98,6 +98,10 @@ dependencies; it exposes `triage_scan` (read-only) and `triage_fix` (dry-run by 
   (`config.json5-only`) with no fix candidates (v0.1 semantics unchanged).
 - Node floor: the full serve flow was re-verified on a real **Node 20.19.5** binary (fake HOME;
   FIXED + backup + clean exit 0).
+- Official SDK check: an unmodified **`@modelcontextprotocol/sdk` 1.30.0** client connects (it
+  requests protocol 2025-11-25; our counter-offer of 2025-06-18 is accepted and the session
+  proceeds), lists both tools, and runs `triage_scan` + `triage_fix {dry_run:false}` (FIXED +
+  backup) against a fabricated home.
 - Distributable: fresh-prefix install of the packed tarball (0.2.0, 25 files) → `--version` and
   `serve` (both tools listed) run from the installed copy; suite grew 50 → **65/65 green**;
   `tsc` build green.
