@@ -14,10 +14,12 @@ export {
   parseYamlLight,
   normalizeJson5,
   extractServersFromJson,
+  extractClaudeProjectServers,
   findTrailingComma,
   stripTrailingCommas,
   readFileSafe,
 } from './parse.ts';
+export type { ClaudeProjectScope } from './parse.ts';
 export { runChecks, checkCrossClientDrift, resolveCommandOnPath, findEnvRefs, DEFAULT_CHECK_CONTEXT } from './checks.ts';
 export type { CheckContext } from './checks.ts';
 export { applyFixes, repairJsonText, stripJsonComments } from './fix.ts';

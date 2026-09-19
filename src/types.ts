@@ -14,6 +14,8 @@ export interface Diagnostic {
   clientId?: string;
   file?: string;
   serverName?: string;
+  /** Location detail for entries in shared files (e.g. the Claude Code project path in ~/.claude.json). */
+  context?: string;
   /** Whether `--fix` can address this in a future/current version */
   fixable?: boolean;
 }
@@ -28,6 +30,11 @@ export interface ServerEntry {
   cwd?: string;
   /** Explicitly disabled entries (OpenClaw `enabled: false`) — kept but not connected; runtime checks are skipped. */
   enabled?: boolean;
+  /**
+   * Where this entry lives when the file is shared and the location is not obvious —
+   * e.g. the project path for Claude Code project-scoped servers inside ~/.claude.json.
+   */
+  context?: string;
 }
 
 export interface ParsedConfig {
@@ -37,6 +44,8 @@ export interface ParsedConfig {
   ok: boolean;
   /** Set when parsing is intentionally partial, e.g. 'toml-minimal', 'yaml-light' */
   caveat?: string;
+  /** Coverage note about non-obvious extractions (e.g. project-scoped servers folded in from ~/.claude.json). */
+  note?: string;
   servers: ServerEntry[];
   diagnostics: Diagnostic[];
 }

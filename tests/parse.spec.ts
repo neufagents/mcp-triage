@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractServersFromJson, findTrailingComma, parseJsonConfig, parseTomlConfig, parseYamlLight } from '../src/parse.ts';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { extractClaudeProjectServers, extractServersFromJson, findTrailingComma, parseConfigFile, parseJsonConfig, parseTomlConfig, parseYamlLight } from '../src/parse.ts';
 
 test('json: valid config extracts servers (mcpServers)', () => {
   const text = JSON.stringify({ mcpServers: { fs: { command: 'npx', args: ['-y', 'pkg'], env: { A: '1' } } } }, null, 2);
@@ -175,4 +178,48 @@ test('yaml-light: dsh inline args array', () => {
   ].join('\n');
   const r = parseYamlLight(text, 'cordis.patch.yml', 'dsh');
   assert.deepEqual(r.servers[0].args, ['-x', 'a b']);
+});
+
+test('claude-code: project-scoped servers (projects.*.mcpServers) are extracted and merged by shape', () => {
+  const data = {
+    mcpServers: { global1: { command: 'node' } },
+    projects: {
+      '/a/p1': { mcpServers: { shared: { command: 'npx', args: ['-y', 'x'] }, solo1: { command: 'uvx' } } },
+      '/a/p2': { mcpServers: { shared: { command: 'npx', args: ['-y', 'x'] }, solo2: { command: 'ghost' } } },
+      '/a/p3': { mcpServers: {} },
+      '/a/p4': { history: [] },
+    },
+  };
+  const scope = extractClaudeProjectServers(data);
+  assert.equal(scope.projects, 2);
+  assert.equal(scope.servers.length, 3);
+  const shared = scope.servers.find((s) => s.name === 'shared')!;
+  assert.equal(shared.context, 'projects: /a/p1, /a/p2');
+  const solo1 = scope.servers.find((s) => s.name === 'solo1')!;
+  assert.equal(solo1.context, 'project: /a/p1');
+});
+
+test('claude-code: extractClaudeProjectServers tolerates non-object / missing projects', () => {
+  assert.deepEqual(extractClaudeProjectServers(null), { servers: [], projects: 0 });
+  assert.deepEqual(extractClaudeProjectServers({ projects: [] }), { servers: [], projects: 0 });
+});
+
+test('claude-code: parseConfigFile folds project-scoped servers in and sets the coverage note', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'triage-cc-'));
+  const file = path.join(tmp, '.claude.json');
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      mcpServers: { user1: { command: 'node' } },
+      projects: { '/p/x': { mcpServers: { s: { command: 'npx' } } } },
+    }),
+  );
+  const parsed = parseConfigFile({ clientId: 'claude-code', file, format: 'json', scope: 'global' });
+  assert.equal(parsed.servers.length, 2);
+  assert.ok(parsed.note?.includes('project-scoped'));
+  assert.equal(parsed.servers.find((s) => s.name === 's')?.context, 'project: /p/x');
+  // A project-scope file (e.g. .mcp.json) never triggers projects.* extraction.
+  const pj = parseConfigFile({ clientId: 'claude-code', file, format: 'json', scope: 'project' });
+  assert.equal(pj.note, undefined);
+  assert.equal(pj.servers.length, 1);
 });
