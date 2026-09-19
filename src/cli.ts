@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// mcp-triage CLI — v0.1
+// mcp-triage CLI — v0.2
 // Usage: mcp-triage [scan] [--file <path>] [--cwd <dir>] [--json] [--fix [--dry-run]] [--version] [--help]
+//        mcp-triage serve   (stdio MCP server; see src/serve.ts)
 
 import path from 'node:path';
 import { discoverFiles } from './discover.ts';
@@ -28,6 +29,12 @@ Fix mode (opt-in):
   mcp-triage scan --fix --dry-run  Show what --fix would do; write nothing.
 
 Exit codes: 0 = no error findings, 1 = at least one error finding (post-fix when --fix is used).
+
+MCP server mode:
+  mcp-triage serve                 Run as a stdio MCP server so an agent client can run triage
+                                   itself (tools: triage_scan read-only, triage_fix dry-run by
+                                   default). Register it in any MCP client, e.g.:
+                                     {"command": "npx", "args": ["-y", "mcp-triage", "serve"]}
 `;
 }
 
@@ -48,7 +55,17 @@ function collectDiagnostics(parsed: ParsedConfig[]): Diagnostic[] {
 
 const argv = process.argv.slice(2);
 
-if (argv.includes('--version') || argv.includes('-V')) {
+if (argv[0] === 'serve') {
+  // MCP server mode (stdio): newline-delimited JSON-RPC on stdin/stdout (src/serve.ts).
+  // Runs until the client closes stdin; never falls through to scan mode.
+  const { runServer } = await import('./serve.ts');
+  runServer();
+} else {
+  runScanCli();
+}
+
+function runScanCli(): void {
+  if (argv.includes('--version') || argv.includes('-V')) {
   console.log(VERSION);
   process.exit(0);
 }
@@ -90,3 +107,4 @@ const input = { files, parsed, diagnostics };
 console.log(json ? renderJson(input, VERSION, fixes) : renderHuman(input, VERSION, fixes));
 
 if (diagnostics.some((d) => d.severity === 'error')) process.exitCode = 1;
+}

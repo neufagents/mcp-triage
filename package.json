@@ -1,6 +1,6 @@
 {
   "name": "mcp-triage",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Triage broken MCP setups across 8 agent clients — find what is wrong, fix what is fixable, escalate the rest. Zero runtime dependencies.",
   "type": "module",
   "bin": {

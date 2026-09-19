@@ -83,6 +83,25 @@ them alongside the user-scoped bag.
   under `projects["D:/HermesWorkSpace"]`) is now included; scan stays clean (no new findings).
 - Suite grew 45 → **50/50 green**; `tsc` build green; `--json` exposes `note` + `context`.
 
+## MCP server mode (v0.2, `serve`, 2026-09-19)
+
+`mcp-triage serve` speaks the MCP stdio transport (newline-delimited JSON-RPC 2.0) with no runtime
+dependencies; it exposes `triage_scan` (read-only) and `triage_fix` (dry-run by default).
+
+- Protocol: `initialize` negotiates MCP revisions 2024-11-05 / 2025-03-26 / 2025-06-18 (unknown
+  versions get a counter-offer of the newest supported); `ping`, `tools/list`, `tools/call` are
+  covered; notifications are ignored; unknown requests get -32601; stdout carries protocol
+  messages only (logs go to stderr).
+- Fabricated-home E2E (Windows, spawned CLI over stdio): a broken strict-client config is reported
+  by `triage_scan`; `triage_fix {dry_run: false}` → FIXED, backup byte-preserved, file re-parses;
+  the default dry-run writes nothing; an unattributed strict-JSON-only file is reported as info
+  (`config.json5-only`) with no fix candidates (v0.1 semantics unchanged).
+- Node floor: the full serve flow was re-verified on a real **Node 20.19.5** binary (fake HOME;
+  FIXED + backup + clean exit 0).
+- Distributable: fresh-prefix install of the packed tarball (0.2.0, 25 files) → `--version` and
+  `serve` (both tools listed) run from the installed copy; suite grew 50 → **65/65 green**;
+  `tsc` build green.
+
 ## What is NOT covered yet (planned)
 
 - VS Code user "profiles" (`%APPDATA%\Code\User\profiles\<id>\mcp.json`).

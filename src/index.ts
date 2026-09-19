@@ -22,6 +22,8 @@ export {
 export type { ClaudeProjectScope } from './parse.ts';
 export { runChecks, checkCrossClientDrift, resolveCommandOnPath, findEnvRefs, DEFAULT_CHECK_CONTEXT } from './checks.ts';
 export type { CheckContext } from './checks.ts';
+export { runServer, handleMessage, TOOLS, runScan, runFix, collectDiagnostics, SERVER_NAME } from './serve.ts';
+export type { ToolDef, RpcRequest, RpcResponse, ScanOutcome } from './serve.ts';
 export { applyFixes, repairJsonText, stripJsonComments } from './fix.ts';
 export type { FixOptions, RepairResult } from './fix.ts';
 export { renderHuman, renderJson } from './report.ts';

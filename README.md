@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/neufagents/mcp-triage/actions/workflows/ci.yml/badge.svg)](https://github.com/neufagents/mcp-triage/actions/workflows/ci.yml) [![npm version](https://img.shields.io/npm/v/mcp-triage.svg)](https://www.npmjs.com/package/mcp-triage) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-**Triage broken MCP setups across agent clients.** A [NeufAgents](https://neufagents.com) tool. One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and — where it is safe — repairs it.
+**Triage broken MCP setups across agent clients.** A [NeufAgents](https://neufagents.com) tool. One command scans the MCP configuration of every agent client on your machine, finds what is broken or fragile, explains it in plain English, and — where it is safe — repairs it. It runs as a CLI, and as a stdio MCP server (`mcp-triage serve`) so an agent client can run triage itself.
 
 Why *triage*: a triage assesses severity fast and routes the case — a free check-and-fix pass for the mechanical problems, and a precise hint (plus a human path) for setups that need surgery.
 
@@ -13,7 +13,8 @@ Why *triage*: a triage assesses severity fast and routes the case — a free che
 - **Fixes** (opt-in `--fix`): mechanical repairs, only for files that fail to parse — strips JSON comments and trailing commas, re-verifies the result, keeps a `.mcp-triage.bak` backup. Everything else is escalated with a hint, never guessed at.
 - **JSON5-aware**: OpenClaw's `openclaw.json` is JSON5 (comments + trailing commas legal) and is parsed as such — no false syntax errors
 - **CLI-first**: runs even when your client cannot start — that is exactly when you need it
-- **Zero runtime dependencies**
+- **MCP server mode** (`mcp-triage serve`): the same pipeline as MCP tools — `triage_scan` (read-only) and `triage_fix` (dry-run by default) — so any MCP client can run triage itself
+- **Zero runtime dependencies** (including in server mode)
 
 ## Usage
 
@@ -23,6 +24,7 @@ npx mcp-triage --json     # machine-readable output
 npx mcp-triage --file ./my-config.json
 npx mcp-triage --fix              # repair files that fail to parse (comments / trailing commas)
 npx mcp-triage --fix --dry-run    # show what --fix would do; write nothing
+npx mcp-triage serve              # run as an MCP server (stdio) — see "MCP server mode" below
 ```
 
 Exit codes: `0` = no error findings, `1` = at least one error finding (post-fix when `--fix` is used).
@@ -83,6 +85,25 @@ Summary: 1 error(s), 1 warning(s), 1 info — 4 server(s) across 3 file(s).
 - Claude Code project-scoped `mcpServers` inside `~/.claude.json` (`projects.*.mcpServers`) are scanned too — identical definitions across projects are merged into one entry whose context lists the projects, and findings carry the project path.
 - `--file` on a file we cannot attribute to a client: if it only parses as JSON5, you get an **info** saying so (not an error) — strict-JSON clients would reject such a file.
 
+## MCP server mode (v0.2)
+
+`mcp-triage serve` runs the same pipeline as a stdio MCP server, so an agent client can run triage itself. Register it like any other MCP server:
+
+```json
+{
+  "mcpServers": {
+    "triage": { "command": "npx", "args": ["-y", "mcp-triage", "serve"] }
+  }
+}
+```
+
+Tools:
+
+- **`triage_scan`** — read-only scan; same discovery and checks as the CLI, returns the full report.
+- **`triage_fix`** — mechanical repairs. **Dry-run by default**: nothing is written unless the call passes `dry_run: false`. Same guarantees as the CLI: parse-gated writes, `.mcp-triage.bak` backup kept.
+
+Both tools run on the machine where the server runs; stdout carries protocol messages only (logs go to stderr).
+
 ## When `--fix` is not enough
 
 `--fix` covers the mechanical class — for free. For everything else (a client that still refuses to start after a clean scan, a setup you want hardened before it breaks, a migration across machines), [NeufAgents](https://neufagents.com) offers a paid fix service: send your triage report to `hi@neufagents.com` and you get a written scope before any work starts. Fully async, no calls.
@@ -91,20 +112,22 @@ Summary: 1 error(s), 1 warning(s), 1 info — 4 server(s) across 3 file(s).
 
 ```bash
 npm install
-npm test          # node:test, 50 specs — dev/test scripts need Node 22.18+ (native type stripping)
+npm test          # node:test, 65 specs — dev/test scripts need Node 22.18+ (native type stripping)
 npm run build     # tsc → dist/
 node src/cli.ts scan
 node src/cli.ts scan --fix --dry-run
+node src/cli.ts serve   # MCP server in dev (same Node 22.18+ requirement)
 ```
 
 The dev and test scripts import `.ts` files directly, so they need Node 22.18+. The published package
-itself supports Node 20+ (`engines`) and its `scan` / `--fix` flows are smoke-tested on Node 20.19.
+itself supports Node 20+ (`engines`) and its `scan` / `--fix` / `serve` flows are smoke-tested on Node 20.19.
 
 CI runs the full spec suite on Node 22 and a build + `--version` smoke on Node 20 on every push and pull request.
 
 The package is ESM with zero runtime dependencies; `src/index.ts` is the library entry
 (`import { discoverFiles, parseConfigFile, runChecks, applyFixes } from 'mcp-triage'`),
-`src/cli.ts` is the `mcp-triage` binary. `prepack` builds `dist/`; `prepublishOnly` runs the specs.
+`src/cli.ts` is the `mcp-triage` binary, and `src/serve.ts` is the stdio MCP server (also
+re-exported from the library entry). `prepack` builds `dist/`; `prepublishOnly` runs the specs.
 
 ## License
 
