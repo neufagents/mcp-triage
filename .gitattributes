@@ -1,0 +1,2 @@
+# Keep the Dockerfile LF-only (CRLF breaks multi-line RUN in container builds).
+Dockerfile text eol=lf
