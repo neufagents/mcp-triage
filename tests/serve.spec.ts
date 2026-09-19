@@ -193,7 +193,14 @@ test('serve: CLI end-to-end — initialize, tools/list over stdio, clean exit on
 test('serve: triage_fix end-to-end on a fake home — repairs a strict client config, keeps a backup', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'triage-fakehome-'));
   const appdata = path.join(home, 'AppData', 'Roaming');
-  const cfgDir = path.join(appdata, 'Claude');
+  // Claude Desktop config location differs per platform (see src/clients.ts):
+  // win32: <appdata>/Claude | darwin: <home>/Library/Application Support/Claude | linux: <home>/.config/Claude
+  const cfgDir =
+    process.platform === 'win32'
+      ? path.join(appdata, 'Claude')
+      : process.platform === 'darwin'
+        ? path.join(home, 'Library', 'Application Support', 'Claude')
+        : path.join(home, '.config', 'Claude');
   fs.mkdirSync(cfgDir, { recursive: true });
   const cfg = path.join(cfgDir, 'claude_desktop_config.json');
   fs.writeFileSync(cfg, TRAILING_COMMA);
