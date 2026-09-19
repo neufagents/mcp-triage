@@ -77,6 +77,13 @@ test('serve: unknown request method yields method-not-found; notifications are i
   assert.equal(note2, null);
 });
 
+test('serve: request methods sent without an id (notifications) get no response', async () => {
+  // JSON-RPC 2.0 / MCP: notifications are one-way — the receiver MUST NOT send a response.
+  assert.equal(await handleMessage({ jsonrpc: '2.0', method: 'ping' }), null);
+  assert.equal(await handleMessage({ jsonrpc: '2.0', method: 'tools/list' }), null);
+  assert.equal(await handleMessage({ jsonrpc: '2.0', method: 'tools/call', params: { name: 'triage_scan' } }), null);
+});
+
 test('serve: invalid request shapes yield -32600; empty lists are served defensively', async () => {
   const bad = await handleMessage([1, 2, 3]);
   assert.equal(bad!.error?.code, -32600);

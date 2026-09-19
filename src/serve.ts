@@ -163,6 +163,10 @@ export async function handleMessage(raw: unknown): Promise<RpcResponse | null> {
   const msg = raw as RpcRequest;
   const id = msg.id ?? null;
   const hasId = msg.id !== undefined && msg.id !== null;
+  // JSON-RPC 2.0 / MCP base protocol: a message without an id is a notification, and the
+  // receiver MUST NOT send a response to it. Requests MUST carry an id — so any id-less
+  // message is one-way and is handled silently here, whatever its method.
+  if (!hasId) return null;
   const method = typeof msg.method === 'string' ? msg.method : '';
   const params = (msg.params && typeof msg.params === 'object' ? msg.params : {}) as Record<string, unknown>;
 

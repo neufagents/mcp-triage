@@ -112,7 +112,7 @@ Both tools run on the machine where the server runs; stdout carries protocol mes
 
 ```bash
 npm install
-npm test          # node:test, 65 specs — dev/test scripts need Node 22.18+ (native type stripping)
+npm test          # node:test, 66 specs — dev/test scripts need Node 22.18+ (native type stripping)
 npm run build     # tsc → dist/
 node src/cli.ts scan
 node src/cli.ts scan --fix --dry-run
